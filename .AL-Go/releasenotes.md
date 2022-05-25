@@ -1,4 +1,6 @@
-# Preview
+# Release Notes
+
+## Preview
 
 ### Issues
 - Issue #100 - Add more resilience to localDevEnv.ps1 and cloudDevEnv.ps1
@@ -39,7 +41,7 @@
 - New Setting: set **doNotRunBcptTest** to true (in workflow specific settings file?) to avoid running BCPT tests
 - New Setting: set **obsoleteTagMinAllowedMajorMinor** to enable appsource cop to validate your app against future changes (AS0105). This setting will become auto-calculated in Test Current, Test Next Minor and Test Next Major later.
 
-# v1.4
+## v1.4
 
 ### All workflows
 - Add requested permissions to avoid dependency on user/org defaults being too permissive
@@ -66,7 +68,7 @@
 - You can add a secret called EnvironmentName under the environment (or \<environmentname\>_ENVIRONMENTNAME globally)
 
 
-# v1.3
+## v1.3
 
 ### Issues
 - Issue #90 - Environments did not work. Secrets for environments specified in settings can now be **\<environmentname\>_AUTHCONTEXT**
@@ -74,7 +76,7 @@
 ### CI/CD Workflow
 - Give warning instead of error If no artifacts are found in **appDependencyProbingPaths**
 
-# v1.2
+## v1.2
 
 ### Issues
 - Issue #90 - Environments did not work. Environments (even if only defined in the settings file) did not work for private repositories if you didn't have a premium subscription.
@@ -83,7 +85,7 @@
 - **LocalDevEnv.ps1** and ***CloudDevEnv.ps1** will now spawn a new PowerShell window as admin instead of running inside VS Code. Normally people doesn't run VS Code as administrator, and they shouldn't have to. Furthermore, I have seen a some people having problems when running these scripts inside VS Code.
 
 
-# v1.1
+## v1.1
 
 ### Settings
 - New Repo Setting: **GenerateDependencyArtifact** (default **false**). When true, CI/CD pipeline generates an artifact with the external dependencies used for building the apps in this repo.
