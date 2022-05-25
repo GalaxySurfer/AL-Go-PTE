@@ -1,9 +1,9 @@
-# Preview
+## Preview
 
-## Issues
+### Issues
 - Issue #100 - Add more resilience to localDevEnv.ps1 and cloudDevEnv.ps1
 
-## All workflows
+### All workflows
 - During initialize, all AL-Go settings files are now checked for validity and reported correctly
 
 ### CI/CD workflow
