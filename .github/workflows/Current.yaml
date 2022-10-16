@@ -109,19 +109,11 @@ jobs:
 
       - name: Publish artifacts - bcpt test results
         uses: actions/upload-artifact@v3
-        if: success() || failure()
+        if: (success() || failure()) && (hashFiles(format('{0}/bcptTestResults.json',matrix.project)) != '')
         with:
           name: ${{ env.bcptTestResultsArtifactsName }}
           path: '${{ matrix.project }}/bcptTestResults.json'
           if-no-files-found: ignore
-
-      - name: Analyze Test Results
-        id: analyzeTestResults
-        if: (success() || failure()) && ((hashFiles(format('{0}/TestResults.xml',matrix.project)) != '') || (hashFiles(format('{0}/bcptTestResults.json',matrix.project)) != ''))
-        uses: freddydk/AL-Go-Actions/AnalyzeTests@main
-        with:
-          parentTelemetryScopeJson: ${{ needs.Initialization.outputs.telemetryScopeJson }}
-          Project: ${{ matrix.project }}
 
       - name: Cleanup
         if: always()
