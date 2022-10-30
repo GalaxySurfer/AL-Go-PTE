@@ -13,6 +13,8 @@ defaults:
 jobs:
   Initialization:
     runs-on: [ windows-latest ]
+    env:
+      workflowDepth: 1
     outputs:
       telemetryScopeJson: ${{ steps.init.outputs.telemetryScopeJson }}
       settings: ${{ steps.ReadSettings.outputs.SettingsJson }}
@@ -40,6 +42,7 @@ jobs:
           getProjects: 'Y'
 
       - name: Determine Build Order
+        if: env.WorkflowDepth > 1
         id: BuildOrder
         run: |
           $ErrorActionPreference = "STOP"
