@@ -317,26 +317,18 @@ jobs:
             });
 
       - name: Checkout
-        if: github.event_name != 'workflow_run' || (github.event_name == 'workflow_run' && github.event.workflow_run.head_repository.full_name != github.repository)
         uses: actions/checkout@v3
         with:
           lfs: true
     
-      - name: Checkout Pull Request
-        if: github.event_name == 'workflow_run' && github.event.workflow_run.head_repository.full_name == github.repository
-        uses: actions/checkout@v3
-        with:
-          lfs: true
-          ref: ${{ github.event.workflow_run.head_branch }}
-
       - name: Download thisbuild artifacts
         if: env.WorkflowDepth > 1
         uses: actions/download-artifact@v3
         with:
           path: '${{ github.workspace }}\.dependencies'
 
-      - name: Download Fork Pull Request Changes
-        if: github.event_name == 'workflow_run' && github.event.workflow_run.head_repository.full_name != github.repository
+      - name: Download Pull Request Changes
+        if: github.event_name == 'workflow_run'
         uses: actions/github-script@v6
         with:
           script: |
@@ -358,8 +350,10 @@ jobs:
             var fs = require('fs');
             fs.writeFileSync('.PullRequestChanges.zip', Buffer.from(download.data));
 
-      - name: Apply Fork Pull Request Changes
-        if: github.event_name == 'workflow_run' && github.event.workflow_run.head_repository.full_name != github.repository
+      - name: Apply Pull Request Changes
+        if: github.event_name == 'workflow_run'
+        env:
+          PRREPOFULLNAME: ${{ github.event.workflow_run.head_repository.full_name }}
         run: |
           $ErrorActionPreference = "STOP"
           $location = (Get-Location).path
@@ -376,8 +370,10 @@ jobs:
             $newFolder = [System.IO.Path]::GetDirectoryName($newPath)
             $extension = [System.IO.Path]::GetExtension($path)
             $filename = [System.IO.Path]::GetFileName($path)
-            if ($extension -eq '.ps1' -or $extension -eq '.yaml' -or $extension -eq '.yml' -or $filename -eq "CODEOWNERS") {
-              throw "Pull Request containing changes to scripts, workflows or CODEOWNERS are not allowed from forks."
+            if ($ENV:PRREPOFULLNAME -ne $ENV:GITHUB_REPOSITORY) {
+              if ($extension -eq '.ps1' -or $extension -eq '.yaml' -or $extension -eq '.yml' -or $filename -eq "CODEOWNERS") {
+                throw "Pull Request containing changes to scripts, workflows or CODEOWNERS are not allowed from forks."
+              }
             }
             if ($deleteFile) {
               if (Test-Path $newPath) {
