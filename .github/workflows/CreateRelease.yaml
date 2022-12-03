@@ -116,7 +116,6 @@ jobs:
               $artifact = $allArtifacts.artifacts | Where-Object { $_.name -like "$project-$refname-Apps-*" } | Select-Object -First 1
               $artifactsVersion = $artifact.name.SubString($artifact.name.LastIndexOf('-Apps-')+6)
             }
-            $artifact | out-host
             if ($sha) {
               if ($artifact.workflow_run.head_sha -ne $sha) {
                 Write-Host "::Error::The build selected for release doesn't contain all projects. Please rebuild all projects by manually running the CI/CD workflow and recreate the release."
