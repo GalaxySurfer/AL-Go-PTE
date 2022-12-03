@@ -68,6 +68,7 @@ jobs:
     outputs:
       artifacts: ${{ steps.analyzeartifacts.outputs.artifacts }}
       upload_url: ${{ steps.createrelease.outputs.upload_url }}
+      releaseId: ${{ steps.createrelease.outputs.releaseId }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -93,6 +94,7 @@ jobs:
           $projects = '${{ steps.ReadSettings.outputs.ProjectsJson }}' | ConvertFrom-Json
           $projects | out-host
           $include = @()
+          $sha = ''
           $projects | ForEach-Object {
             $thisProject = $_
             if ($thisProject -and ($thisProject -ne '.')) {
@@ -101,6 +103,7 @@ jobs:
             else {
               $project = $env:RepoName
             }
+            $refname = "$ENV:GITHUB_REF_NAME".Replace('/','_')
             Write-Host "Analyzing artifacts for project $project"
             $appVersion = '${{ github.event.inputs.appVersion }}'
             $headers = @{ 
@@ -110,10 +113,20 @@ jobs:
             $allArtifacts = Invoke-WebRequest -UseBasicParsing -Headers $headers -Uri "$($ENV:GITHUB_API_URL)/repos/$($ENV:GITHUB_REPOSITORY)/actions/artifacts" | ConvertFrom-Json
             $artifactsVersion = $appVersion
             if ($appVersion -eq "latest") {
-              $artifact = $allArtifacts.artifacts | Where-Object { $_.name -notlike "$project-PR*" -and $_.name -like "$project-*-Apps-*" } | Select-Object -First 1
+              $artifact = $allArtifacts.artifacts | Where-Object { $_.name -like "$project-$refname-Apps-*" } | Select-Object -First 1
               $artifactsVersion = $artifact.name.SubString($artifact.name.LastIndexOf('-Apps-')+6)
             }
-            $allArtifacts.artifacts | Where-Object { $_.name -notlike "$project-PR*" -and ($_.name -like "$project-*-Apps-$($artifactsVersion)" -or $_.name -like "$project-*-TestApps-$($artifactsVersion)" -or $_.name -like "$project-*-Dependencies-$($artifactsVersion)") } | ForEach-Object {
+            $artifact | out-host
+            if ($sha) {
+              if ($artifact.workflow_run.head_sha -ne $sha) {
+                throw "The build selected for release doesn't contain all projects. Please rebuild all projects by manually running the CI/CD workflow and recreate the release."
+              }
+            }
+            else {
+              $sha = $artifact.workflow_run.head_sha
+            }
+
+            $allArtifacts.artifacts | Where-Object { ($_.name -like "$project-$refname-Apps-$($artifactsVersion)" -or $_.name -like "$project-$refname-TestApps-$($artifactsVersion)" -or $_.name -like "$project-$refname-Dependencies-$($artifactsVersion)") } | ForEach-Object {
               $atype = $_.name.SubString(0,$_.name.Length-$artifactsVersion.Length-1)
               $atype = $atype.SubString($atype.LastIndexOf('-')+1)
               $include += $( [ordered]@{ "name" = $_.name; "url" = $_.archive_download_url; "atype" = $atype; "project" = $thisproject } )
@@ -127,6 +140,8 @@ jobs:
           $artifactsJson = $artifacts | ConvertTo-Json -compress
           Add-Content -Path $env:GITHUB_OUTPUT -Value "artifacts=$artifactsJson"
           Write-Host "artifacts=$artifactsJson"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "commitish=$sha"
+          Write-Host "commitish=$sha"
 
       - name: Prepare release notes
         id: createreleasenotes
@@ -136,16 +151,30 @@ jobs:
           tag_name: ${{ github.event.inputs.tag }}
 
       - name: Create release
-        uses: actions/create-release@v1
+        uses: actions/github-script@v6
         id: createrelease
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          bodyMD: ${{ steps.createreleasenotes.outputs.releaseNotes }}
         with:
-          draft: ${{ github.event.inputs.draft=='Y' }}
-          prerelease: ${{ github.event.inputs.prerelease=='Y' }}
-          release_name: ${{ github.event.inputs.name }}
-          tag_name: ${{ github.event.inputs.tag }}
-          body: ${{ steps.createreleasenotes.outputs.releaseNotes }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            var bodyMD = process.env.bodyMD
+            const createReleaseResponse = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: '${{ github.event.inputs.tag }}',
+              name: '${{ github.event.inputs.name }}',
+              body: bodyMD.replaceAll('\\n','\n'),
+              draft: ${{ github.event.inputs.draft=='Y' }},
+              prerelease: ${{ github.event.inputs.prerelease=='Y' }},
+              target_commitish: '${{ steps.analyzeartifacts.outputs.commitish }}'
+            });
+            const {
+              data: { id: releaseId, html_url: htmlUrl, upload_url: uploadUrl }
+            } = createReleaseResponse;
+            core.setOutput('releaseId', releaseId);
+            core.setOutput('html_url', htmlUrl);
+            core.setOutput('upload_url', uploadUrl);
 
   UploadArtifacts:
     runs-on: [ windows-latest ] 
@@ -180,16 +209,26 @@ jobs:
               "Accept"        = "application/vnd.github.v3+json"
           }
           Invoke-WebRequest -UseBasicParsing -Headers $headers -Uri '${{ matrix.url }}' -OutFile '${{ matrix.name }}.zip'
-          
+
       - name: Upload release artifacts
-        uses: actions/upload-release-asset@v1
+        uses: actions/github-script@v6
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          uploadUrl: ${{ needs.createrelease.outputs.upload_url }}
+          releaseId: ${{ needs.createrelease.outputs.releaseId }}
         with:
-          upload_url: ${{ needs.createrelease.outputs.upload_url }}
-          asset_path: '${{ matrix.name }}.zip'
-          asset_name: '${{ matrix.name }}.zip'
-          asset_content_type: application/zip
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const releaseId = process.env.releaseId
+            const assetPath = '${{ matrix.name }}.zip'
+            const assetName = '${{ matrix.name }}.zip'
+            const fs = require('fs');
+            const uploadAssetResponse = await github.rest.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: releaseId,
+              name: assetName,
+              data: fs.readFileSync(assetPath)
+            });
 
       - name: NuGetContext
         id: nuGetContext
